@@ -1,0 +1,95 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+################################################################################
+####### 01: QUALITY CONTROL & DERIVE MAIN TABLE FOR DOWNSTREAM ANALYSES ####### ###############################################################################
+
+In case we ever want to start from scratch and rerun the whole thing:
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+############# A: READ CU, GS and TS and AnaGE
+
+```{r}
+#USER = 'KOSTYA';
+USER = 'KRISTINA';
+if (USER == 'KOSTYA') 
+{
+  #setwd('/home/konstantinpopadin/Desktop/tRNA/');
+  #setwd('/home/kostya/konstantin/SCIENCE_PROJECTS_HEAD/MITOCHONDRIA/tRNA');
+  setwd('/home/konstantinpopadin/Desktop/tRNAs/BODY/2_DERIVED_DATA/');
+  CU <- read.table("codon_usage_new.txt", header=TRUE, sep="\t"); # CodonUsage
+  GS <- read.table("general_intel.txt", header=TRUE, sep="\t");      # GenomeSummary
+  TS <- read.table("harvest.txt", header=TRUE, sep="\t");            # TrnaStructure
+  setwd('/home/konstantinpopadin/Desktop/tRNAs/BODY/1_RAW_DATA/');
+  ECO <-read.table("anage_data.txt", header=TRUE, sep="\t");            # TrnaStructure
+  setwd('/home/konstantinpopadin/Desktop/tRNAs/BODY/3_RESULTS/');
+} else if (USER == 'KRISTINA'){
+  setwd('C:/WB/tRNA')
+  CU <- read.table("2_derived_data/codon_usage_new.txt", header=TRUE, sep="\t");
+  GS <- read.table("2_derived_data/general_intel.txt", header=TRUE, sep="\t");
+  TS <- read.table("2_derived_data/harvest.txt", header=TRUE, sep="\t");
+  }
+
+```
+
+############# B: DERIVE TAXONS IN GC
+
+```{r}
+GS$TAXON = 'SOLJANKA';
+for (i in 1:nrow(GS))
+{ 
+  if (length(grep('Mammalia', GS$taxonomy[i])) == 1) 
+  {GS$TAXON[i] = 'Mammalia';}
+  if (length(grep('Amphibia', GS$taxonomy[i])) == 1) 
+  {GS$TAXON[i] = 'Amphibia';}
+  if (length(grep('Actinopterygii', GS$taxonomy[i])) == 1) 
+  {GS$TAXON[i] = 'Actinopterygii';}
+  if (length(grep('Aves', GS$taxonomy[i])) == 1) 
+  {GS$TAXON[i] = 'Aves';}
+  if (length(grep('Lepidosauria', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'Reptilia'; }
+  if (length(grep('Testudines', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'Reptilia'; }
+  if (length(grep('Crocodylia', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'Reptilia'; }
+  if (length(grep('Dipnoi', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+  if (length(grep('Coelacanthiformes', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+  if (length(grep('Cyclostomata', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+  if (length(grep('Chondrichthyes', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+  if (length(grep('Cephalochordata', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+  if (length(grep('Tunicata', GS$taxonomy[i])) == 1) {GS$TAXON[i] = 'AncientFish'; }
+}
+```
+
+```{r}
+data = data.frame(table(GS$TAXON)); 
+data
+sum(data$Freq) # 3954
+# Var1 Freq
+# 1 Actinopterygii 1905
+# 2       Amphibia  227
+# 3    AncientFish  161
+# 4           Aves  521
+# 5       Mammalia  855
+# 6       Reptilia  285
+print(names(GS))
+```
+
+
+```{r}
+
+```
+
