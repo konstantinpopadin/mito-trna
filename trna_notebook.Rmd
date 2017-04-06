@@ -76,20 +76,41 @@ for (i in 1:nrow(GS))
 
 ```{r}
 data = data.frame(table(GS$TAXON)); 
-data
-sum(data$Freq) # 3954
-# Var1 Freq
-# 1 Actinopterygii 1905
-# 2       Amphibia  227
-# 3    AncientFish  161
-# 4           Aves  521
-# 5       Mammalia  855
-# 6       Reptilia  285
-print(names(GS))
+print(data)
 ```
+Sum of frequencies of derived taxa.
 
+Check they all sum up right.
 
 ```{r}
-
+sum(data$Freq)
 ```
+```{r}
+names(GS)
+```
+
+################## C:  CHECK GENOME LENGTH
+
+```{r}
+nrow(GS)  # 3954
+nrow(GS[GS$genome_length == GS$genome_A + GS$genome_C + GS$genome_G + GS$genome_T + GS$genome_X,]) # 3954! good
+summary(GS$genome_length)
+```
+```{r}
+summary(GS$genome_X)
+```
+```{r}
+GS = GS[order(- GS$genome_X),] 
+# see by eye animals with high X content: Corvus_cornix_cornix - only X - delete it
+GS = GS[GS$species != 'Corvus_cornix_cornix',]; nrow(GS)  # 3953
+summary(GS$genome_A);var(GS$genome_A)/mean(GS$genome_A)
+summary(GS$genome_T);var(GS$genome_T)/mean(GS$genome_T)
+summary(GS$genome_G);var(GS$genome_G)/mean(GS$genome_G)
+summary(GS$genome_C);var(GS$genome_C)/mean(GS$genome_C)  # C content is the most variable! Why?
+#Light chain/ Variability corr with lifespan. Lehmann
+```
+
+################## D:  MERGE GS WITH TS
+
+Rename TS columns before merging:
 
