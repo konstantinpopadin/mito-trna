@@ -44,6 +44,8 @@ if (USER == 'KOSTYA')
   CU <- read.table("2_derived_data/codon_usage_new.txt", header=TRUE, sep="\t");
   GS <- read.table("2_derived_data/general_intel.txt", header=TRUE, sep="\t");
   TS <- read.table("2_derived_data/harvest.txt", header=TRUE, sep="\t");
+  ECO <-read.table("C:/WB/tRNA/1_raw_data/3_eco_params/anage_data.txt", header=TRUE, sep="\t"); 
+  
   }
 
 ```
@@ -78,12 +80,11 @@ for (i in 1:nrow(GS))
 data = data.frame(table(GS$TAXON)); 
 print(data)
 ```
-Sum of frequencies of derived taxa.
 
-Check they all sum up right.
+Check they all sum up right:
 
 ```{r}
-sum(data$Freq)
+paste("Sum of taxa frequencies:", sum(data$Freq))
 ```
 ```{r}
 names(GS)
@@ -92,25 +93,296 @@ names(GS)
 ################## C:  CHECK GENOME LENGTH
 
 ```{r}
-nrow(GS)  # 3954
-nrow(GS[GS$genome_length == GS$genome_A + GS$genome_C + GS$genome_G + GS$genome_T + GS$genome_X,]) # 3954! good
+paste("Number of rows in GS:", nrow(GS))  # 3954
+paste("Number of rows, where A+C+G+T+X == length:", nrow(GS[GS$genome_length == GS$genome_A + GS$genome_C + GS$genome_G + GS$genome_T + GS$genome_X,]))
 summary(GS$genome_length)
 ```
+
+Weirdos with X's in their genome:
+
 ```{r}
 summary(GS$genome_X)
 ```
 ```{r}
 GS = GS[order(- GS$genome_X),] 
 # see by eye animals with high X content: Corvus_cornix_cornix - only X - delete it
-GS = GS[GS$species != 'Corvus_cornix_cornix',]; nrow(GS)  # 3953
-summary(GS$genome_A);var(GS$genome_A)/mean(GS$genome_A)
-summary(GS$genome_T);var(GS$genome_T)/mean(GS$genome_T)
-summary(GS$genome_G);var(GS$genome_G)/mean(GS$genome_G)
-summary(GS$genome_C);var(GS$genome_C)/mean(GS$genome_C)  # C content is the most variable! Why?
-#Light chain/ Variability corr with lifespan. Lehmann
+GS = GS[GS$species != 'Corvus_cornix_cornix',]; 
+paste("Number of tetrapodes - Corvus_cornix_cornix rows:", nrow(GS))  # 3953
 ```
+
+Coefficient of variation for every letter of the genome:
+
+```{r}
+summary(GS$genome_A);
+var(GS$genome_A)/mean(GS$genome_A)
+summary(GS$genome_T);
+var(GS$genome_T)/mean(GS$genome_T)
+summary(GS$genome_G);
+var(GS$genome_G)/mean(GS$genome_G)
+summary(GS$genome_C);
+var(GS$genome_C)/mean(GS$genome_C)
+```
+C content is the most variable! Why? Maybe to do with dinucleotide properties? And also this means that G is most variable on the heavy strand, since here we are working with the light strand. (Light chain/ Variability corr with lifespan. Lehmann)
 
 ################## D:  MERGE GS WITH TS
 
 Rename TS columns before merging:
+```{r}
+print("Old names:")
+names(TS)
+names(TS) = c("species","trna","Structure.Temp","Structure.Gibbs","Structure.Stem_AU","Structure.Stem_CG","Structure.Stem_GU","Structure.Loop_A","Structure.Loop_C","Structure.Loop_G","Structure.Loop_U","Structure.Sequence","Structure.Structure")
+```
+```{r}
+GSTS = merge(GS,TS, by = 'species'); 
+paste("No. of rows in GSTS:", nrow(GSTS))
+GSTS$TIMES = 1
+AGG = aggregate(GSTS$TIMES, by = list(GSTS$species), FUN = sum); 
+paste("No. of rows in AGG:", nrow(AGG))
+```
 
+Statistics by no. of tRNAs:
+
+```{r}
+names(AGG) = c('species','NumOfLines')
+table(AGG$NumOfLines) 
+```
+
+In case of canonical number of tRNAs we expect 22*3 = 66 lines per each species. We have 2138 species like this. This is a maximum, good.
+But there are many additional numbers and especially common is 54/3 = 18. Could you please check - who they are? Which tRNAs they don't have and why?
+
+################## E:  MERGE GSTS WITH CU
+
+For each given tRNA we have to count number of codons from CU in each of 13 gene as well as their total sum.
+
+!Not every genome is the same in terms of codon usage and we are not considering this!
+
+Could you please try to write the code for it? Not neseccary super optimal - just take tRNA name and calculate corresponding codon usage with loops. Finally we need to add 14 columns to GSTS table derived above.
+
+```{r}
+Ala 	= aggregate((CU$GCA+CU$GCC+CU$GCG+CU$GCT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(Ala) = 	c('species','gene','Ala') 
+Arg 	= aggregate((CU$AGA+CU$AGG+CU$CGA+CU$CGC+CU$CGG+CU$CGT),by = list(CU$species,CU$gene), FUN = sum); 	
+names(Arg) = 	c('species','gene','Arg') 
+Asn 	= aggregate((CU$AAC+CU$AAT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Asn) = 	c('species','gene','Asn') 
+Asp 	= aggregate((CU$GAC+CU$GAT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Asp) = 	c('species','gene','Asp') 
+Cys 	= aggregate((CU$TGC+CU$TGT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Cys) = 	c('species','gene','Cys') 
+Gln 	= aggregate((CU$CAA+CU$CAG),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Gln) = 	c('species','gene','Gln') 
+Glu 	= aggregate((CU$GAA+CU$GAG),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Glu) = 	c('species','gene','Glu') 
+Gly 	= aggregate((CU$GGA+CU$GGC+CU$GGG+CU$GGT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(Gly) = 	c('species','gene','Gly') 
+His 	= aggregate((CU$CAC+CU$CAT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(His) = 	c('species','gene','His') 
+Ile 	= aggregate((CU$ATA+CU$ATC+CU$ATT),by = list(CU$species,CU$gene), FUN = sum); 						
+names(Ile) = 	c('species','gene','Ile') 
+LeuCUN = aggregate((CU$CTA+CU$CTC+CU$CTG+CU$CTT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(LeuCUN) = c('species','gene','LeuCUN') 
+LeuUUR = aggregate((CU$TTA+CU$TTG),by = list(CU$species,CU$gene), FUN = sum); 								
+names(LeuUUR) = c('species','gene','LeuUUR') 
+Lys 	= aggregate((CU$AAA+CU$AAG),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Lys) = 	c('species','gene','Lys') 
+Met 	= aggregate((CU$ATG),by = list(CU$species,CU$gene), FUN = sum); 									
+names(Met) = 	c('species','gene','Met') 
+Phe 	= aggregate((CU$TTC+CU$TTT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Phe) = 	c('species','gene','Phe') 
+Pro 	= aggregate((CU$CCA+CU$CCC+CU$CCG+CU$CCT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(Pro) = 	c('species','gene','Pro') 
+SerAGY = aggregate((CU$AGC+CU$AGT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(SerAGY) = c('species','gene','SerAGY') 
+SerUCN = aggregate((CU$TCA+CU$TCC+CU$TCG+CU$TCT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(SerUCN) = c('species','gene','SerUCN') 
+Thr 	= aggregate((CU$ACA+CU$ACC+CU$ACG+CU$ACT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(Thr) = 	c('species','gene','Thr') 
+Trp 	= aggregate((CU$TGG),by = list(CU$species,CU$gene), FUN = sum); 									
+names(Trp) = 	c('species','gene','Trp') 
+Tyr 	= aggregate((CU$TAC+CU$TAT),by = list(CU$species,CU$gene), FUN = sum); 								
+names(Tyr) = 	c('species','gene','Tyr') 
+Val 	= aggregate((CU$GTA+CU$GTC+CU$GTG+CU$GTT),by = list(CU$species,CU$gene), FUN = sum); 				
+names(Val) = 	c('species','gene','Val') 
+Ter 	= aggregate((CU$TAA+CU$TAG+CU$TGA),by = list(CU$species,CU$gene), FUN = sum); 						
+names(Ter) = 	c('species','gene','Ter') 
+
+ALTOGETHER = merge(Ala,Arg, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Asn, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Asp, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Cys, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Gln, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Glu, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Gly, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,His, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Ile, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,LeuCUN, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,LeuUUR, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Lys, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Pro, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Met, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Phe, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,SerAGY, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,SerUCN, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Thr, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Trp, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Tyr, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Val, by = c('species','gene'))
+ALTOGETHER = merge(ALTOGETHER,Ter, by = c('species','gene'))
+
+VecSpecies = unique(ALTOGETHER$species); 
+paste("Number of unique species (len(VecSpecies)):", length(VecSpecies)) # 3954
+
+for (i in 1:length(VecSpecies))
+{ # i = 1
+Species = VecSpecies[i];
+TEMP  = ALTOGETHER[ALTOGETHER$species == Species,];
+row.names(TEMP) = TEMP$gene; 
+TEMP = TEMP[,-c(1,2)]; TEMP = t(TEMP); TEMP = data.frame(TEMP) 
+TEMP$species = Species; TEMP$gene = row.names(TEMP);
+
+paste("dim(TEMP)", dim(TEMP))
+
+if (nrow(TEMP) == 23 && ncol(TEMP) == 15) # 13 genes + species + gene
+  {
+  if (i == 1) {FINAL = TEMP}
+  if (i >  1) {FINAL = rbind(FINAL,TEMP)}
+  }
+}
+
+paste("Dim. of FINAL table:", dim(FINAL))
+```
+
+17 species which are not in the FINAL set don't have 13 genes (!!! what does it mean - poor genome annotation!!!!!!!!!?????????): 
+
+```{r}
+VecFinalSpecies = unique(FINAL$species); 
+paste("Guys with 13 genes that made it into the final:", length(VecFinalSpecies))  # 3937
+outliers = setdiff(VecSpecies,VecFinalSpecies)
+outliers
+```
+
+```{r}
+FINAL$AllGenes = FINAL$ATP6+FINAL$ATP8+FINAL$COX1+FINAL$COX2+FINAL$COX3+FINAL$CYTB+FINAL$ND1+FINAL$ND2+FINAL$ND3+FINAL$ND4+FINAL$ND4L+FINAL$ND5+FINAL$ND6
+names(FINAL)=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','species', 'trna','AllGenes')
+```
+```{r}
+AGG = aggregate(FINAL$AllGenes, by = list(FINAL$species), FUN = sum)
+names(AGG)=c('species','AllCodonsInGenome')
+FINAL = merge(FINAL,AGG, by = 'species', all.x=TRUE)
+names(FINAL) = c("species","CodonUsage.ATP6","CodonUsage.ATP8","CodonUsage.COX1","CodonUsage.COX2","CodonUsage.COX3","CodonUsage.CYTB","CodonUsage.ND1","CodonUsage.ND2","CodonUsage.ND3","CodonUsage.ND4","CodonUsage.ND4L","CodonUsage.ND5","CodonUsage.ND6","trna","CodonUsage.AllGenes","CodonUsage.AllCodonsInGenome")
+```
+```{r}
+paste("No. of rows in GSTS", nrow(GSTS)) 
+paste("No. of rows in FINAL", nrow(FINAL)) 
+GSTSCU = merge(GSTS,FINAL, by = c('species','trna'))
+paste("No. of rows in GSTSCU", nrow(GSTSCU)) 
+names(GSTSCU)
+```
+
+################ ADD ECOLOGY
+
+```{r}
+ECO$SpeciesNew = paste(ECO$Genus,ECO$Species, sep = '_'); 
+paste("Dims. of ECO:", dim(ECO))
+VecNames = names(ECO)
+
+for (i in 1:length(VecNames))
+{
+  VecNames[i] = paste('ECO',VecNames[i],sep = '.');
+}
+
+names(ECO) = VecNames
+str(ECO)
+
+GSTSCUECO = merge(GSTSCU,ECO, by.x = 'species', by.y = 'ECO.SpeciesNew', all.x= TRUE)
+paste("No. of rows in GSTSCU", nrow(GSTSCU))
+paste("No. of rows in GSTSCUECO:", nrow(GSTSCUECO))
+
+write.table(GSTSCUECO, file = 'C:/WB/tRNA/2_derived_data/GenomeStructure.TrnaStability.CodonUsage.Ecology.txt', sep = '\t', quote = FALSE, row.names = FALSE)
+```
+#################################################################################
+##################### 02: ANALYSES: MEAN AND VAR STABILITY of TRNAS IN DIFFERENT TAXONS
+#################################################################################
+
+########################### A: MEAN STABILITY OF TRNA IN DIFFERENT TAXONS AND UNDER DIFFERENT TEMPERATURE
+
+Sometimes there are outliers - we have to look at them by eye. We need to rerun the same code but without 'outlier = FALSE' and find them and understand why they are outliers?
+
+```{r}
+table(GSTS$trna)
+```
+Write to file:
+
+```{r}
+pdf('C:/WB/tRNA/2_derived_data/02_A.TrnaStabAcrossTaxonsWithOutliers.pdf') # pdf('02_A.TrnaStabAcrossTaxonsWithoutOutliers.pdf')
+trna_vec = c('Ala','Arg','Asn','Asp','Cys','Gln','Glu','Gly','His','Ile','LeuCUN','LeuUUR','local','Lys','Met','Phe','Pro','SerAGY','SerUCN','Thr','Trp','Tyr','Val')
+temp_vec = c(0,15,37);
+par(mfrow  = c(1,3))
+for (i in 1:length(trna_vec))
+{
+  for (j in 1:length(temp_vec))
+  {# i = 1; j = 1    
+  temporal_trna = trna_vec[i];
+  temporal_temp = temp_vec[j];
+  DATA =GSTS[GSTS$trna == temporal_trna & GSTS$temp == temporal_temp,];  
+  boxplot(gibbs~TAXON, notch = TRUE, data = DATA, xlab = 'taxons', ylab = 'gibbs', main = paste(temporal_trna,temporal_temp, sep = ' ')); # outline = FALSE, 
+  }
+}
+dev.off()
+```
+
+#################################################################################
+##################### 03: RANK CORRELATION BETWEEN STABILITY AND CODON USAGE FOR EACH SPECIES/GENE
+#################################################################################
+
+```{r}
+#rm(list=ls(all=TRUE))
+# setwd('/home/konstantinpopadin/Downloads/tRNAs/tRNAs/BODY/3_RESULTS')
+# setwd('/home/konstantinpopadin/Desktop/tRNAs/BODY/3_RESULTS/')
+#setwd('/home/kostya/konstantin/SCIENCE_PROJECTS_HEAD/MITOCHONDRIA/tRNAs/BODY/3_RESULTS/')
+M<-GSTSCUECO
+#nrow(M)
+#dim(M)
+```
+
+####### derive GOLD subset with species with 13 protein-coding genes, 22 tRNA, all Stabilities are estimated (not NA) and > -100
+
+```{r}
+GOLD = M[M$trnas ==22 & M$cds == 13 & M$Structure.Temp == 15 & M$NumOfLines == 66,]; 
+nrow(GOLD)
+summary(GOLD$Structure.Gibbs)
+length(unique(GOLD$species)) # 2091
+
+# if I don't require 66 lines - 3769 instead of 2091
+GOLD = M[M$trnas ==22 & M$cds == 13 & M$Structure.Temp == 15,]; nrow(GOLD)
+summary(GOLD$Structure.Gibbs)
+length(unique(GOLD$species)) # 3769
+```
+```{r}
+SpeciesWithTooStabletRNAs = unique(GOLD[GOLD$Structure.Gibbs < -100,]$species); 
+paste("Species with too stable tRNAs:", length(SpeciesWithTooStabletRNAs))
+```
+
+```{r}
+SpeciesWithUnknownStabilityOfTrna = unique(GOLD[is.na(GOLD$Structure.Gibbs),]$species); paste("Species with unknown stability of tRNAs:", length(SpeciesWithUnknownStabilityOfTrna))  # 1034 Why so many = who are they?
+```
+
+```{r}
+GOLD = GOLD[! GOLD$species %in% SpeciesWithTooStabletRNAs,]
+GOLD = GOLD[! GOLD$species %in% SpeciesWithUnknownStabilityOfTrna,]
+paste("No. of rows in GOLD subset:", nrow(GOLD))    # 23012 / 1046 = 22
+paste("No. of species in GOLD subset:", length(unique(GOLD$species))) # 1046
+
+```
+
+Data from table 1 Satoh et al. 2010:
+
+```{r}
+
+
+
+```
+
+
+
+We need a ranked corr. with position as discussed in the very beginning - because shorter transcripts are more abundant (ladders)
