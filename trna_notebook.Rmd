@@ -1,10 +1,14 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "mt-tRNAs"
+output:
+  pdf_document:
+    highlight: tango
+    toc: yes
+  html_notebook:
+    toc: yes
 ---
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
 ```{r}
@@ -12,8 +16,9 @@ plot(cars)
 ```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+
 
 ################################################################################
 ####### 01: QUALITY CONTROL & DERIVE MAIN TABLE FOR DOWNSTREAM ANALYSES ####### ###############################################################################
@@ -324,11 +329,12 @@ for (i in 1:length(trna_vec))
   {# i = 1; j = 1    
   temporal_trna = trna_vec[i];
   temporal_temp = temp_vec[j];
-  DATA =GSTS[GSTS$trna == temporal_trna & GSTS$temp == temporal_temp,];  
-  boxplot(gibbs~TAXON, notch = TRUE, data = DATA, xlab = 'taxons', ylab = 'gibbs', main = paste(temporal_trna,temporal_temp, sep = ' ')); # outline = FALSE, 
+  DATA = GSTS[GSTS$trna == temporal_trna & GSTS$temp == temporal_temp,]; 
+  boxplot(DATA$Structure.Gibbs ~ DATA$TAXON, notch = TRUE, xlab = 'taxons', ylab = 'gibbs', main = paste(temporal_trna,temporal_temp, sep = ' ')); # outline = FALSE, 
   }
 }
 dev.off()
+
 ```
 
 #################################################################################
@@ -375,14 +381,670 @@ paste("No. of species in GOLD subset:", length(unique(GOLD$species))) # 1046
 
 ```
 
-Data from table 1 Satoh et al. 2010:
+Data from table 1 Satoh et al. 2010. 
+Merging GOLD dataset with info about location of trna on the mitochondrial genome.
 
 ```{r}
+trna = c('Phe','Pro','Val','LeuUUR','Ile','Met','Trp','Gly','Ala','LeuCUN','Glu','Asp','Lys','SerUCN','Arg','Tyr','Cys','Asn','His','Gln','SerAGY','Thr'); 
+#length(trna)
+# TrnaStrand = c('H','L','H','H','H','H','H','H','L','H','L','H','H','L','H','L','L','L','H','L','H','H'); length(TrnaStrand)
+TrnaStrand = c(0,1,0,0,0,0,0,0,1,0,1,0,0,1,0,1,1,1,0,1,0,0); 
+#length(TrnaStrand)
+
+TrnaLocationFromCR =  c(1,1,1026,2653,3686,3825,4935,9414,10369,11689,1282,6941,7718,8508,9828,10133,10198,10295,11561,11624,11630,15311);  #length(TrnaLocationFromCR)
+
+TrnaAnn = data.frame(trna,TrnaStrand,TrnaLocationFromCR)
+
+GOLD = merge(GOLD, TrnaAnn, by = 'trna')
+```
+
+I know this is a ranked corr. and precise location doesn't matter as long as relative placement of genes doesn't change, so just in case, going to reparse the raw file, get locations for unique species in SpeciesVec tRNAs and redo the analysis more accurately for mammals, then do the same for birds:
+
+A quick note about other languages:
+
+-Each code chunk is submitted independently. For example, an object created in one python code chunk is not accessible in a later python code chunk.
+-Each code chunk is submitted all at once. You cannot run individual lines of a code chunk interactively.
+-Only printed outputs or errors are captured and placed into the notebook. For example, if you define a python object and want to use it later, you need to save it to disk.  If you create a plot in python (i.e., with matplotlib) you must save it to disk and then load it into the notebook with R.
+-Objects from other languages are not available in the environment pane.
+-Not all knitr languages are currently supported with interactive chunk execution in the Notebook.
+
+```{r}
+```
+
+```{r}
+SpeciesVec = unique(GOLD[GOLD$TAXON == 'Mammalia',]$species)
+# SpeciesVec = unique(GOLD$species)
+for (i in 1:length(SpeciesVec)) # 229 of mammals
+{ # i = 1
+  species = SpeciesVec[i]
+  # All tRNAs for that species
+  TEMP = GOLD[GOLD$species == SpeciesVec[i],]
+  # CodonUsage & Stability:  positive on average
+  AllGenes = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.AllGenes, method = 'spearman'); 
+  AllGenes.RHO =  as.numeric(AllGenes[4]); 
+  AllGenes.P = as.numeric(AllGenes[3]);
+  # Stability & location: positive
+  AllGenes1 = cor.test(-TEMP$Structure.Gibbs,TEMP$TrnaLocationFromCR, method = 'spearman'); 
+  AllGenes1.RHO =  as.numeric(AllGenes1[4]); 
+  AllGenes1.P = as.numeric(AllGenes1[3]);
+  # Codon Usage & location: 
+  AllGenes2 = cor.test(TEMP$CodonUsage.AllGenes,TEMP$TrnaLocationFromCR, method = 'spearman'); 
+  AllGenes2.RHO =  as.numeric(AllGenes2[4]); 
+  AllGenes2.P = as.numeric(AllGenes2[3]);
+  
+  # par(mfrow= c(2,2))
+  # plot(TEMP$TrnaLocationFromCR,TEMP$CodonUsage.AllGenes)
+  # plot(-TEMP$Structure.Gibbs,TEMP$CodonUsage.AllGenes)
+  # plot(TEMP$TrnaLocationFromCR,-TEMP$Structure.Gibbs)
+  # dev.off()
+  
+  ## multiple model:
+  ##In time sub for multiple rank model - ppcor?
+  ML = lm(scale(TEMP$CodonUsage.AllGenes) ~ 0 + scale(-TEMP$Structure.Gibbs) + scale(TEMP$TrnaLocationFromCR) + TEMP$TrnaStrand); 
+  summary(ML)
+  StabCoeff = ML$coefficients[1]; 
+  StabP = coef(summary(ML))[1,4];
+  LocationCoeff = ML$coefficients[2]; 
+  LocationP = coef(summary(ML))[2,4]
+  StrandCoeff = ML$coefficients[3]; 
+  StrandP = coef(summary(ML))[3,4]
+  
+  ONE_LINE = data.frame(species,AllGenes.RHO,AllGenes1.RHO,AllGenes2.RHO,AllGenes.P,AllGenes1.P,AllGenes2.P,StabCoeff,LocationCoeff,StrandCoeff,StabP,LocationP,StrandP)
+  if (i == 1) {FINAL = ONE_LINE}
+  if (i >  1) {FINAL = rbind(FINAL,ONE_LINE)}
+}
+
+```
+Got too many ties here, i.e. identical values
 
 
+```{r}
+names(FINAL)=c('species','Stability_CodonUsage.RHO','Stability_Location.RHO','CodonUsage_Location.RHO','Stability_CodonUsage.P','Stability_Location.P','CodonUsage_Location.P','LmCodonUsageStabCoeff','LmCodonUsageLocationCoeff','LmCodonUsageStrandCoeff','LmCodonUsageStabP','LmCodonUsageLocationP','LmCodonUsageStrandP')
+
+summary(FINAL$LmCodonUsageStabCoeff)  # -0.22780 -0.04958  0.06228  0.05668  0.16400  0.35520
+summary(FINAL[FINAL$LmCodonUsageStabP < 0.3,]$LmCodonUsageStabCoeff)  # 0.2346  0.2468  0.2677  0.2777  0.3012  0.3552
+summary(FINAL$LmCodonUsageLocationCoeff)                                      # -0.225300 -0.052310  0.003395 -0.004636  0.037460  0.166800
+summary(FINAL[FINAL$LmCodonUsageLocationP < 0.5,]$LmCodonUsageLocationCoeff)  # -0.22530 -0.21410 -0.19270 -0.11100 -0.08953  0.16680
+summary(FINAL$LmCodonUsageStrandCoeff)  # -0.53630 -0.27310 -0.21120 -0.21880 -0.15290  0.07338  negative if 'L'
+
+```
+
+```{r}
+# It seems that Codon Usage stronger depends on Stability (positively) rather than on location (negatively) and if so, we expect, that Stability and Location interact negatively (see a confirmation below).
+# PIC!!! STRANDS!!! SO, both these effects contribute to CodonUsage - more frequent aminoacids are closer to CR and more stable...
+
+summary(FINAL$Stability_CodonUsage.RHO) # -0.32920  0.05782  0.14750  0.14060  0.25130  0.45470
+summary(FINAL[FINAL$Stability_CodonUsage.P < 0.2,]$Stability_CodonUsage.RHO) # -0.3292  0.3085  0.3281  0.3077  0.3540  0.4547 
+
+summary(FINAL$Stability_Location.RHO) # -0.387200 -0.103400 -0.004518 -0.013380  0.072300  0.532800
+summary(FINAL[FINAL$Stability_Location.P < 0.2,]$Stability_Location.RHO) # -0.38720 -0.33920 -0.30100 -0.02471  0.33050  0.53280 
+
+summary(FINAL$CodonUsage_Location.RHO) # -0.099120 -0.025810  0.005648  0.004491  0.037190  0.175300
+summary(FINAL[FINAL$CodonUsage_Location.P < 1,]$CodonUsage_Location.RHO) # -0.099120 -0.025810  0.005648  0.004491  0.037190  0.175300 
+```
+
+```{r}
+### GENE-SPECIFIC CORRELATIONS (between Codon Usage & Gibbs & location for each gene each species)
+SpeciesVec = unique(GOLD[GOLD$TAXON == 'Mammalia',]$species)
+for (i in 1:length(SpeciesVec)) # 229 of mammals
+{ # i = 1
+  species = SpeciesVec[i]
+  TEMP = GOLD[GOLD$species == SpeciesVec[i],]
+  # CodonUsage & Gibbs
+  ATP6 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ATP6, method = 'spearman'); ATP6.RHO =  as.numeric(ATP6[4]); ATP6.P = as.numeric(ATP6[3]);
+  ATP8 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ATP8, method = 'spearman'); ATP8.RHO =  as.numeric(ATP8[4]); ATP8.P = as.numeric(ATP8[3]);
+  COX1 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.COX1, method = 'spearman'); COX1.RHO =  as.numeric(COX1[4]); COX1.P = as.numeric(COX1[3]);
+  COX2 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.COX2, method = 'spearman'); COX2.RHO =  as.numeric(COX2[4]); COX2.P = as.numeric(COX2[3]);
+  COX3 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.COX3, method = 'spearman'); COX3.RHO =  as.numeric(COX3[4]); COX3.P = as.numeric(COX3[3]);
+  CYTB = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.CYTB, method = 'spearman'); CYTB.RHO =  as.numeric(CYTB[4]); CYTB.P = as.numeric(CYTB[3]);
+  ND1 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND1, method = 'spearman'); ND1.RHO =  as.numeric(ND1[4]); ND1.P = as.numeric(ND1[3]);
+  ND2 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND2, method = 'spearman'); ND2.RHO =  as.numeric(ND2[4]); ND2.P = as.numeric(ND2[3]);
+  ND3 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND3, method = 'spearman'); ND3.RHO =  as.numeric(ND3[4]); ND3.P = as.numeric(ND3[3]);
+  ND4 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND4, method = 'spearman'); ND4.RHO =  as.numeric(ND4[4]); ND4.P = as.numeric(ND4[3]);
+  ND4L = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND4L, method = 'spearman'); ND4L.RHO =  as.numeric(ND4L[4]); ND4L.P = as.numeric(ND4L[3]);
+  ND5 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND5, method = 'spearman'); ND5.RHO =  as.numeric(ND5[4]); ND5.P = as.numeric(ND5[3]);
+  ND6 = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.ND6, method = 'spearman'); ND6.RHO =  as.numeric(ND6[4]); ND6.P = as.numeric(ND6[3]);
+  AllGenes = cor.test(-TEMP$Structure.Gibbs,TEMP$CodonUsage.AllGenes, method = 'spearman'); AllGenes.RHO =  as.numeric(AllGenes[4]); AllGenes.P = as.numeric(AllGenes[3]);
+  ONE_LINE = data.frame(species,ATP6.RHO,ATP8.RHO,COX1.RHO,COX2.RHO,COX3.RHO,CYTB.RHO,ND1.RHO,ND2.RHO,ND3.RHO,ND4.RHO,ND4L.RHO,ND5.RHO,ND6.RHO,AllGenes.RHO,ATP6.P,ATP8.P,COX1.P,COX2.P,COX3.P,CYTB.P,ND1.P,ND2.P,ND3.P,ND4.P,ND4L.P,ND5.P,ND6.P,AllGenes.P)
+  if (i == 1) {FINAL = ONE_LINE}
+  if (i >  1) {FINAL = rbind(FINAL,ONE_LINE)}
+}
+  
+summary(FINAL$ATP6.RHO)  
+summary(FINAL$ATP8.RHO)  
+summary(FINAL$COX1.RHO)  
+summary(FINAL$COX2.RHO)  
+summary(FINAL$COX3.RHO)  
+summary(FINAL$CYTB.RHO)  
+summary(FINAL$ND1.RHO)  
+summary(FINAL$ND2.RHO)  
+summary(FINAL$ND3.RHO)  
+summary(FINAL$ND4.RHO)  
+summary(FINAL$ND4L.RHO)  
+summary(FINAL$ND5.RHO)  
+summary(FINAL$ND6.RHO)  
+summary(FINAL$AllGenes.RHO)  
+
+### add TAXONS and ecology
+M.Species = M[!duplicated(M$species),]
+FINAL = merge(FINAL,M.Species,all.x = TRUE, by = 'species')
+
+
+setwd('C:/WB/tRNA/3_figures/')
+pdf('03_A_SpearmanRhoBetweenGeneSpecificCodonUsageAndStabillity.pdf')
+boxplot(FINAL$ATP6.RHO,FINAL$ATP8.RHO,FINAL$COX1.RHO,FINAL$COX2.RHO,FINAL$COX3.RHO,FINAL$CYTB.RHO,FINAL$ND1.RHO,FINAL$ND2.RHO,FINAL$ND3.RHO,FINAL$ND4.RHO,FINAL$ND4L.RHO,FINAL$ND5.RHO,FINAL$ND6.RHO,FINAL$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Chordata', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(FINAL[FINAL$ATP6.P < 0.1,]$ATP6.RHO,FINAL[FINAL$ATP8.P < 0.1,]$ATP8.RHO,FINAL[FINAL$COX1.P < 0.1,]$COX1.RHO,FINAL[FINAL$COX2.P < 0.1,]$COX2.RHO,FINAL[FINAL$COX3.P < 0.1,]$COX3.RHO,FINAL[FINAL$CYTB.P < 0.1,]$CYTB.RHO,FINAL[FINAL$ND1.P < 0.1,]$ND1.RHO,FINAL[FINAL$ND2.P < 0.1,]$ND2.RHO,FINAL[FINAL$ND3.P < 0.1,]$ND3.RHO,FINAL[FINAL$ND4.P < 0.1,]$ND4.RHO,FINAL[FINAL$ND4L.P < 0.1,]$ND4L.RHO,FINAL[FINAL$ND5.P < 0.1,]$ND5.RHO,FINAL[FINAL$ND6.P < 0.1,]$ND6.RHO,FINAL[FINAL$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Chordata, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+TEMP = FINAL[FINAL$TAXON == 'Mammalia',]
+boxplot(TEMP$ATP6.RHO,TEMP$ATP8.RHO,TEMP$COX1.RHO,TEMP$COX2.RHO,TEMP$COX3.RHO,TEMP$CYTB.RHO,TEMP$ND1.RHO,TEMP$ND2.RHO,TEMP$ND3.RHO,TEMP$ND4.RHO,TEMP$ND4L.RHO,TEMP$ND5.RHO,TEMP$ND6.RHO,TEMP$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Mammalia', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(TEMP[TEMP$ATP6.P < 0.1,]$ATP6.RHO,TEMP[TEMP$ATP8.P < 0.1,]$ATP8.RHO,TEMP[TEMP$COX1.P < 0.1,]$COX1.RHO,TEMP[TEMP$COX2.P < 0.1,]$COX2.RHO,TEMP[TEMP$COX3.P < 0.1,]$COX3.RHO,TEMP[TEMP$CYTB.P < 0.1,]$CYTB.RHO,TEMP[TEMP$ND1.P < 0.1,]$ND1.RHO,TEMP[TEMP$ND2.P < 0.1,]$ND2.RHO,TEMP[TEMP$ND3.P < 0.1,]$ND3.RHO,TEMP[TEMP$ND4.P < 0.1,]$ND4.RHO,TEMP[TEMP$ND4L.P < 0.1,]$ND4L.RHO,TEMP[TEMP$ND5.P < 0.1,]$ND5.RHO,TEMP[TEMP$ND6.P < 0.1,]$ND6.RHO,TEMP[TEMP$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Mammalia, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+TEMP = FINAL[FINAL$TAXON == 'Aves',]
+boxplot(TEMP$ATP6.RHO,TEMP$ATP8.RHO,TEMP$COX1.RHO,TEMP$COX2.RHO,TEMP$COX3.RHO,TEMP$CYTB.RHO,TEMP$ND1.RHO,TEMP$ND2.RHO,TEMP$ND3.RHO,TEMP$ND4.RHO,TEMP$ND4L.RHO,TEMP$ND5.RHO,TEMP$ND6.RHO,TEMP$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Aves', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(TEMP[TEMP$ATP6.P < 0.1,]$ATP6.RHO,TEMP[TEMP$ATP8.P < 0.1,]$ATP8.RHO,TEMP[TEMP$COX1.P < 0.1,]$COX1.RHO,TEMP[TEMP$COX2.P < 0.1,]$COX2.RHO,TEMP[TEMP$COX3.P < 0.1,]$COX3.RHO,TEMP[TEMP$CYTB.P < 0.1,]$CYTB.RHO,TEMP[TEMP$ND1.P < 0.1,]$ND1.RHO,TEMP[TEMP$ND2.P < 0.1,]$ND2.RHO,TEMP[TEMP$ND3.P < 0.1,]$ND3.RHO,TEMP[TEMP$ND4.P < 0.1,]$ND4.RHO,TEMP[TEMP$ND4L.P < 0.1,]$ND4L.RHO,TEMP[TEMP$ND5.P < 0.1,]$ND5.RHO,TEMP[TEMP$ND6.P < 0.1,]$ND6.RHO,TEMP[TEMP$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Aves, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+TEMP = FINAL[FINAL$TAXON == 'Amphibia',]
+boxplot(TEMP$ATP6.RHO,TEMP$ATP8.RHO,TEMP$COX1.RHO,TEMP$COX2.RHO,TEMP$COX3.RHO,TEMP$CYTB.RHO,TEMP$ND1.RHO,TEMP$ND2.RHO,TEMP$ND3.RHO,TEMP$ND4.RHO,TEMP$ND4L.RHO,TEMP$ND5.RHO,TEMP$ND6.RHO,TEMP$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Amphibia', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(TEMP[TEMP$ATP6.P < 0.1,]$ATP6.RHO,TEMP[TEMP$ATP8.P < 0.1,]$ATP8.RHO,TEMP[TEMP$COX1.P < 0.1,]$COX1.RHO,TEMP[TEMP$COX2.P < 0.1,]$COX2.RHO,TEMP[TEMP$COX3.P < 0.1,]$COX3.RHO,TEMP[TEMP$CYTB.P < 0.1,]$CYTB.RHO,TEMP[TEMP$ND1.P < 0.1,]$ND1.RHO,TEMP[TEMP$ND2.P < 0.1,]$ND2.RHO,TEMP[TEMP$ND3.P < 0.1,]$ND3.RHO,TEMP[TEMP$ND4.P < 0.1,]$ND4.RHO,TEMP[TEMP$ND4L.P < 0.1,]$ND4L.RHO,TEMP[TEMP$ND5.P < 0.1,]$ND5.RHO,TEMP[TEMP$ND6.P < 0.1,]$ND6.RHO,TEMP[TEMP$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Amphibia, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+TEMP = FINAL[FINAL$TAXON == 'Reptilia',]
+boxplot(TEMP$ATP6.RHO,TEMP$ATP8.RHO,TEMP$COX1.RHO,TEMP$COX2.RHO,TEMP$COX3.RHO,TEMP$CYTB.RHO,TEMP$ND1.RHO,TEMP$ND2.RHO,TEMP$ND3.RHO,TEMP$ND4.RHO,TEMP$ND4L.RHO,TEMP$ND5.RHO,TEMP$ND6.RHO,TEMP$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Reptilia', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(TEMP[TEMP$ATP6.P < 0.1,]$ATP6.RHO,TEMP[TEMP$ATP8.P < 0.1,]$ATP8.RHO,TEMP[TEMP$COX1.P < 0.1,]$COX1.RHO,TEMP[TEMP$COX2.P < 0.1,]$COX2.RHO,TEMP[TEMP$COX3.P < 0.1,]$COX3.RHO,TEMP[TEMP$CYTB.P < 0.1,]$CYTB.RHO,TEMP[TEMP$ND1.P < 0.1,]$ND1.RHO,TEMP[TEMP$ND2.P < 0.1,]$ND2.RHO,TEMP[TEMP$ND3.P < 0.1,]$ND3.RHO,TEMP[TEMP$ND4.P < 0.1,]$ND4.RHO,TEMP[TEMP$ND4L.P < 0.1,]$ND4L.RHO,TEMP[TEMP$ND5.P < 0.1,]$ND5.RHO,TEMP[TEMP$ND6.P < 0.1,]$ND6.RHO,TEMP[TEMP$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Reptilia, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+TEMP = FINAL[FINAL$TAXON == 'Actinopterygii',]
+boxplot(TEMP$ATP6.RHO,TEMP$ATP8.RHO,TEMP$COX1.RHO,TEMP$COX2.RHO,TEMP$COX3.RHO,TEMP$CYTB.RHO,TEMP$ND1.RHO,TEMP$ND2.RHO,TEMP$ND3.RHO,TEMP$ND4.RHO,TEMP$ND4L.RHO,TEMP$ND5.RHO,TEMP$ND6.RHO,TEMP$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), outline = FALSE, cex = 0.5, notch = TRUE, pos = 1, main = 'Actinopterygii', cex.axis=0.5)
+abline(h=0, col = 'red')
+boxplot(TEMP[TEMP$ATP6.P < 0.1,]$ATP6.RHO,TEMP[TEMP$ATP8.P < 0.1,]$ATP8.RHO,TEMP[TEMP$COX1.P < 0.1,]$COX1.RHO,TEMP[TEMP$COX2.P < 0.1,]$COX2.RHO,TEMP[TEMP$COX3.P < 0.1,]$COX3.RHO,TEMP[TEMP$CYTB.P < 0.1,]$CYTB.RHO,TEMP[TEMP$ND1.P < 0.1,]$ND1.RHO,TEMP[TEMP$ND2.P < 0.1,]$ND2.RHO,TEMP[TEMP$ND3.P < 0.1,]$ND3.RHO,TEMP[TEMP$ND4.P < 0.1,]$ND4.RHO,TEMP[TEMP$ND4L.P < 0.1,]$ND4L.RHO,TEMP[TEMP$ND5.P < 0.1,]$ND5.RHO,TEMP[TEMP$ND6.P < 0.1,]$ND6.RHO,TEMP[TEMP$AllGenes.P < 0.1,]$AllGenes.RHO,names=c('ATP6','ATP8','COX1','COX2','COX3','CYTB','ND1','ND2','ND3','ND4','ND4L','ND5','ND6','AllGenes'), cex = 0.5, outline = FALSE, notch = TRUE, main = 'Actinopterygii, signif', cex.axis=0.5)  
+abline(h=0, col = 'red')
+
+dev.off()
+
+### it seems that COX3 AND ND4L ARE REALLY UNUSUAL! THEY HAVE NEGATIVE CORRELATION (in case of low p) BETWEEN CODON USAGE AND GIBBS ENERGY. WHY???????
+### moreover this signal is more or less common in different taxa!!!
+### the translation rate should be decreased there?! 
+
+#############################################
+##### if RHO describes the level of optimisation of translation - it might correlate with BMR:
+### taxon specific RHO:
+
+
+boxplot(AllGenes.RHO ~ TAXON, data = FINAL)
+abline(h = 0, col = 'red')
+boxplot(COX3.RHO ~ TAXON, data = FINAL)
+abline(h = 0, col = 'red')
+boxplot(CYTB.RHO ~ TAXON, data = FINAL)
+abline(h = 0, col = 'red')
+
+names(FINAL)
+table(FINAL$TAXON)
+#Actinopterygii       Amphibia    AncientFish           Aves       Mammalia       Reptilia 
+#762                     22             18               55            131             58 
+
+cor.test(FINAL[FINAL$TAXON == 'Mammalia',]$AllGenes.RHO,FINAL[FINAL$TAXON == 'Mammalia',]$ECO.Metabolic.rate..W., method = 'spearman')
+cor.test(FINAL[FINAL$TAXON == 'Aves',]$AllGenes.RHO,FINAL[FINAL$TAXON == 'Aves',]$ECO.Metabolic.rate..W., method = 'spearman')
+plot(FINAL$AllGenes.RHO,log2(FINAL$ECO.Metabolic.rate..W.))
+
+cor.test(FINAL[FINAL$TAXON == 'Mammalia',]$AllGenes.RHO,FINAL[FINAL$TAXON == 'Mammalia',]$ECO.Body.mass..g., method = 'spearman')
+cor.test(FINAL[FINAL$TAXON == 'Reptilia',]$AllGenes.RHO,FINAL[FINAL$TAXON == 'Reptilia',]$ECO.Body.mass..g., method = 'spearman')
+
+# Pipeton - язык програмирования для молекулярщиков
+
+names(spearman) = c("species", "gene", "Spearman(stability_CU)")
+
+write.table(spearman, file = 'Spearman.txt', sep = '\t', quote = FALSE, row.names = FALSE)
+```
+
+We need a ranked corr. with position as discussed in the very beginning - because shorter transcripts are more abundant (ladders)
+
+Ppcor (spearman) for mammals. Y - stability. Xs - 
+```{r}
+library(ppcor)
+#Get our subset of data
+GOLD_M = GOLD[GOLD$TAXON == 'Mammalia',]
+#Take instead of Structure.Gibbs the same thing but *-1 to get stability 
+#Stability  = GOLD$Structure.Gibbs * -1
+
+#tRNA names vector
+summary(GOLD$trna)
+
+#Try for Ala first
+GOLD_M_Ala = GOLD_M[GOLD_M$trna == "Ala",]
+GOLD_A = GOLD[GOLD$Structure.Temp == 15,]
+GOLD_A = GOLD_A[!is.na(GOLD_A$Structure.Gibbs),]
+GOLD_A = GOLD_A[!is.na(GOLD_A$CodonUsage.AllGenes),]
+DF[!is.na(DF$y),]
+GOLD_M_Ala_15 = GOLD_M_Ala[GOLD_M_Ala$Structure.Temp == "15",]
+#Exclude ones with NAs in gibbs, codon_usage
+#any(is.na())
+#GOLD_M_Ala_15 = GOLD_M_Ala_15[complete.cases(GOLD_M_Ala_15),]
+pcor.test(GOLD_A$Structure.Gibbs, GOLD_A$CodonUsage.AllGenes, GOLD_A$TrnaLocationFromCR, method = 'spearman')
+
+
+#Then try to mush with another trna
+
+#for (i in trna){
+  #Get the stabilities for each of the trnas
+  #Get Xs
+  #Compute ppcor and summarise
+#}
 
 ```
 
 
+Redundant stuff below
+```{r}
+####################### Kristina's code:
+## SPEARMAN ##
 
-We need a ranked corr. with position as discussed in the very beginning - because shorter transcripts are more abundant (ladders)
+species = unique(as.character(CU$species))
+trnas = unique(as.character(TS$trna))[1:22]
+genes = unique(as.character(CU$gene))
+
+spearman = data.frame()
+
+#for each species
+for (i in species){
+  for (j in genes){
+    r = CU[which(CU$species == i & CU$gene == j),]
+    s = TS[which(TS$species == i & TS$Structure.Temp == 15),]
+    #get the stability of each trna
+    x = c(s[which(s$trna == "Ala"),][,4],
+          s[which(s$trna == "Arg"),][,4],
+          s[which(s$trna == "Asn"),][,4],
+          s[which(s$trna == "Asp"),][,4],
+          s[which(s$trna == "Cys"),][,4],
+          s[which(s$trna == "Gln"),][,4],
+          s[which(s$trna == "Glu"),][,4],
+          s[which(s$trna == "Gly"),][,4],
+          s[which(s$trna == "His"),][,4],
+          s[which(s$trna == "Ile"),][,4],
+          s[which(s$trna == "LeuCUN"),][,4],
+          s[which(s$trna == "LeuUUR"),][,4],
+          s[which(s$trna == "Lys"),][,4],
+          s[which(s$trna == "Met"),][,4],
+          s[which(s$trna == "Phe"),][,4],
+          s[which(s$trna == "Pro"),][,4],
+          s[which(s$trna == "SerAGY"),][,4],
+          s[which(s$trna == "SerUCN"),][,4],
+          s[which(s$trna == "Thr"),][,4],
+          s[which(s$trna == "Trp"),][,4],
+          s[which(s$trna == "Tyr"),][,4],
+          s[which(s$trna == "Val"),][,4]) * -1
+    #get the codon usage of each trna
+    y = c(#Ala
+          sum(r$GCA, r$GCC, r$GCG, r$GCT),
+          #Arg
+          sum(r$AGA, r$AGG, r$CGA, r$CGC, r$CGG, r$CGT),
+          #Asn
+          sum(r$AAC, r$AAT),
+          #Asp
+          sum(r$GAC, r$GAT),
+          #Cys
+          sum(r$TGC, r$TGT),
+          #Gln
+          sum(r$CAA, r$CAG),
+          #Glu
+          sum(r$GAA, r$GAG),
+          #Gly
+          sum(r$GGA, r$GGC, r$GGG, r$GGT),
+          #His
+          sum(r$CAC, r$CAT),
+          #Ile
+          sum(r$ATA, r$ATC, r$ATT),
+          #LeuCUN
+          sum(r$CTA, r$CTC, r$CTG, r$CTT),
+          #LeuUUR
+          sum(r$TTA, r$TTG),
+          #Lys
+          sum(r$AAA, r$AAG),
+          #Met
+          sum(r$ATG),
+          #Phe
+          sum(r$TTC, r$TTT),
+          #Pro
+          sum(r$CCA, r$CCC, r$CCG, r$CCT),
+          #SerAGY
+          sum(r$AGC, r$AGT),
+          #SerUCN
+          sum(r$TCA, r$TCC, r$TCG, r$TCT),
+          #Thr
+          sum(r$ACA, r$ACC, r$ACG, r$ACT),
+          #Trp
+          sum(r$TGG),
+          #Tyr
+          sum(r$TAC, r$TAT),
+          #Val
+          sum(r$GTA, r$GTC, r$GTG, r$GTT))
+    if (length(x) == length(y)){
+      corr = cor(x, y, method="spearman")
+      toadd = cbind(i, j, corr)
+      spearman = rbind(spearman, toadd)
+      print(i)
+      print(j)
+        }
+
+  }
+}
+
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+################################################# OOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLLLLLLLDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+
+
+###################################################
+###################################################
+###################################################
+
+# Вопрос для R: как изменчивость в BMR (теплокровные, холоднокровные, BMR) влияет
+# на стабильность tRNA и GC cостав митохондррий.
+# Y(BMR) = X1 (deltaG) +X2 (GC) + X1*X2
+
+# Read infile
+Rdata <- read.delim("C:\\WB\\tRNA\\_old\\R_data.txt", header=TRUE, sep="\t")
+#Rdata <- read.table("/home/konstantinpopadin/Desktop/tRNA/R_data.txt", header=TRUE, sep="\t")
+#dim(Rdata)
+#names(Rdata)
+Rdata = Rdata[Rdata$klass != 'sister_pairs',]  # delete internal nodes
+#dim(Rdata)
+
+summary(Rdata$GC)
+
+summary(Rdata$Ln_W_10)
+Rdata = Rdata[Rdata$Ln_W_10 > 0,]  # delete species with unknown body mass
+dim(Rdata)
+
+# Collect group names into a list
+groups <- levels(Rdata$groups) # "amphibia" "birds"  "mammals"  "reptilia"
+groups  # there are four groups, but really three of them are empty - in Rdata now there are only mammals
+
+subAmphibia <- Rdata[grep("amphibia", Rdata$groups),]
+subBirds <- Rdata[grep("birds", Rdata$groups),]
+subMammals <- Rdata[grep("mammals", Rdata$groups),]
+subReptilia <- Rdata[grep("reptilia", Rdata$groups),]
+
+
+#### there is no BMR in the database, but for the beginning we can use LnW instead (the higher the body mass the lower the BMR) 
+Trp <- lm(Rdata$Trp_gibbs_2_37 ~ Rdata$GC + Rdata$Ln_W_10) 
+summary(Trp)  # both coefficients are marginally-significant and positive: 
+              # tRNA is getting less stable in large-bodied mammals (with lower BMR) 
+              # and in GC-rich mammals (this is unusual)
+
+Ala <- lm(Rdata$Ala_gibbs_2_37 ~ Rdata$GC + Rdata$Ln_W_10) 
+summary(Ala)  # tRNA is getting less stable in large-bodied mammals (with lower BMR)
+              # and is getting more stable in GC-rich mammals (this is expected)
+
+Ala <- lm(Rdata$Ala_gibbs_2_37 ~ Rdata$GC*Rdata$Ln_W_10) 
+summary(Ala)  # tRNA is getting less stable in large-bodied mammals (with lower BMR) 
+              # and is getting more stable in GC-rich mammals (this is expected)
+
+Tyr <- lm(Rdata$Tyr_gibbs_2_37 ~ Rdata$GC + Rdata$Ln_W_10) 
+summary(Tyr)  #
+
+Val <- lm(Rdata$Val_gibbs_2_37 ~ Rdata$GC*Rdata$Ln_W_10)
+summary(Val)  #
+
+summary(Rdata$Trp_gibbs_2_37)
+
+#plot(Trp)
+
+# WCGC
+Rdata_WCGC <- read.delim("C:\\WB\\tRNA\\2_processed_files\\5_from_old\\R_data_1_WCGC.txt", header=TRUE, sep="\t")
+# There are no sister-pairs, got rid of them in python
+
+#Not possile to sort dicts alphabetically in Python? ergo loops not possible
+#Can't refernec col. names by string either :(
+#count = 14 # Ignore please 
+
+# 1
+Ala_WCGC <- lm(Rdata_WCGC$Ala_gibbs_2_37 ~ Rdata_WCGC$Ala_GC + Rdata_WCGC$Ala_WC )
+summary(Ala_WCGC)
+# 2
+Arg_WCGC <- lm(Rdata_WCGC$Arg_gibbs_2_37 ~ Rdata_WCGC$Arg_GC + Rdata_WCGC$Arg_WC )
+summary(Arg_WCGC)
+# 3
+Asn_WCGC <- lm(Rdata_WCGC$Asn_gibbs_2_37 ~ Rdata_WCGC$Asn_GC + Rdata_WCGC$Asn_WC )
+summary(Asn_WCGC)
+# 4
+Asp_WCGC <- lm(Rdata_WCGC$Asp_gibbs_2_37 ~ Rdata_WCGC$Asp_GC + Rdata_WCGC$Asp_WC )
+summary(Asp_WCGC)
+# 5
+Cys_WCGC <- lm(Rdata_WCGC$Cys_gibbs_2_37 ~ Rdata_WCGC$Cys_GC + Rdata_WCGC$Cys_WC )
+summary(Cys_WCGC)
+# 6
+Gln_WCGC <- lm( Rdata_WCGC$Gln_gibbs_2_37 ~ Rdata_WCGC$Gln_GC + Rdata_WCGC$Gln_WC )
+summary(Gln_WCGC)
+# 7
+Glu_WCGC <- lm( Rdata_WCGC$Glu_gibbs_2_37 ~ Rdata_WCGC$Glu_GC + Rdata_WCGC$Glu_WC )
+summary(Glu_WCGC)
+# 8
+Gly_WCGC <- lm( Rdata_WCGC$Gly_gibbs_2_37 ~ Rdata_WCGC$Gly_GC + Rdata_WCGC$Gly_WC )
+summary(Gly_WCGC)
+# 9
+His_WCGC <- lm( Rdata_WCGC$His_gibbs_2_37 ~ Rdata_WCGC$His_GC + Rdata_WCGC$His_WC )
+summary(His_WCGC)
+# 10
+Ile_WCGC <- lm( Rdata_WCGC$Ile_gibbs_2_37 ~ Rdata_WCGC$Ile_GC + Rdata_WCGC$Ile_WC )
+summary(Ile_WCGC)
+# 11
+LeuCUN_WCGC <- lm( Rdata_WCGC$LeuCUN_gibbs_2_37 ~ Rdata_WCGC$LeuCUN_GC + Rdata_WCGC$LeuCUN_WC )
+summary(LeuCUN_WCGC)
+# 12
+LeuUUR_WCGC <- lm( Rdata_WCGC$LeuUUR_gibbs_2_37 ~ Rdata_WCGC$LeuUUR_GC + Rdata_WCGC$LeuUUR_WC )
+summary(LeuUUR_WCGC)
+# 13 
+Lys_WCGC <- lm( Rdata_WCGC$Lys_gibbs_2_37 ~ Rdata_WCGC$Lys_GC + Rdata_WCGC$Lys_WC )
+summary(Lys)
+# 14 
+Met_WCGC <- lm( Rdata_WCGC$Met_gibbs_2_37 ~ Rdata_WCGC$Met_GC + Rdata_WCGC$Met_WC )
+summary(Met_WCGC)
+# 15
+Phe_WCGC <- lm( Rdata_WCGC$Phe_gibbs_2_37 ~ Rdata_WCGC$Phe_GC + Rdata_WCGC$Phe_WC )
+summary(Phe_WCGC)
+# 16 
+Pro_WCGC <- lm( Rdata_WCGC$Pro_gibbs_2_37 ~ Rdata_WCGC$Pro_GC + Rdata_WCGC$Pro_WC )
+summary(Pro_WCGC)
+# 17 
+SerAGY_WCGC <- lm( Rdata_WCGC$SerAGY_gibbs_2_37 ~ Rdata_WCGC$SerAGY_GC + Rdata_WCGC$SerAGY_WC )
+summary(SerAGY_WCGC)
+# 18
+SerUCN_WCGC <- lm( Rdata_WCGC$SerUCN_gibbs_2_37 ~ Rdata_WCGC$SerUCN_GC + Rdata_WCGC$SerUCN_WC )
+summary(SerUCN_WCGC)
+# 19
+Thr_WCGC <- lm( Rdata_WCGC$Thr_gibbs_2_37 ~ Rdata_WCGC$Thr_GC + Rdata_WCGC$Thr_WC )
+summary(Thr_WCGC)
+# 20
+Trp_WCGC <- lm( Rdata_WCGC$Trp_gibbs_2_37 ~ Rdata_WCGC$Trp_GC + Rdata_WCGC$Trp_WC )
+summary(Trp_WCGC)
+# 21
+Tyr_WCGC <- lm( Rdata_WCGC$Tyr_gibbs_2_37 ~ Rdata_WCGC$Tyr_GC + Rdata_WCGC$Tyr_WC )
+summary(Tyr_WCGC)
+# 22
+Val_WCGC <- lm( Val_gibbs_2_37 ~ Val_GC + Val_WC, data = Rdata_WCGC )
+summary(Val_WCGC)
+
+# New table to analyze all tRNAs at once
+# aa contains names of all amino acids
+# Need to create 22 individual datasets and then concatenate them with rowbind or cbind
+
+aa = c('Ala','Cys','Asp','Glu','Phe','Gly','His','Ile','Lys','LeuUUR','LeuCUN','Met','Asn','Pro','Gln','Arg','SerUCN','SerAGY','Thr','Val','Trp','Tyr') 
+aa = sort(aa)
+# match(element, array) returns index. Can map several elements
+
+# New table assembly. Works fine now.
+table = NULL
+for (x in aa){
+  new <- cbind(as.character(Rdata_WCGC$species), as.character(Rdata_WCGC$groups), as.character(c(rep(x, 277))), Rdata_WCGC[,paste(x, "_gibbs_2_37", sep = "")], Rdata_WCGC[,paste(x, "_len", sep = "")], Rdata_WCGC[,paste(x, "_WC", sep = "")], Rdata_WCGC[,paste(x, "_GC", sep = "")])
+  table = rbind(table, new)
+  dim(table)
+}
+#colnames(table) <- c("species", "groups", "tRNA", "gibbs", "aa_len", "WC", "GC")
+colnames(table)
+
+dataset <- data.frame(as.character(table[,1]), as.character(table[,2]), as.character(table[,3]), as.numeric(as.character(table[,4])),as.numeric(as.character(table[,6])),as.numeric(as.character(table[,7])))
+names(dataset) = c("species", "group", "tRNA", "gibbs", "WC", "GC")
+
+dataset = dataset[dataset$gibbs < 0,] # 2 and 999 !!!!!!!!!!
+# + factor(table[,3])
+
+# Checking for table asembly faults
+length(dataset$species) / length(unique(dataset$species))
+table(dataset$tRNA)
+
+# Dummy variable(s) creation
+
+# Baseline -
+
+dataset$D.Ala = as.numeric(dataset$tRNA == 'Ala')
+dataset$D.Arg = as.numeric(dataset$tRNA == 'Arg')
+dataset$D.Asn = as.numeric(dataset$tRNA == 'Asn')
+dataset$D.Asp = as.numeric(dataset$tRNA == 'Asp')
+dataset$D.Cys = as.numeric(dataset$tRNA == 'Cys')
+dataset$D.Gln = as.numeric(dataset$tRNA == 'Gln')
+dataset$D.Glu = as.numeric(dataset$tRNA == 'Glu')
+dataset$D.Gly = as.numeric(dataset$tRNA == 'Gly')
+dataset$D.His = as.numeric(dataset$tRNA == 'His')
+dataset$D.Ile = as.numeric(dataset$tRNA == 'Ile')
+dataset$D.LeuCUN = as.numeric(dataset$tRNA == 'LeuCUN')
+dataset$D.LeuUUR = as.numeric(dataset$tRNA == 'LeuUUR')
+dataset$D.Lys = as.numeric(dataset$tRNA == 'Lys')
+dataset$D.Met = as.numeric(dataset$tRNA == 'Met')
+dataset$D.Phe = as.numeric(dataset$tRNA == 'Phe')
+dataset$D.Pro = as.numeric(dataset$tRNA == 'Pro')
+dataset$D.SerAGY = as.numeric(dataset$tRNA == 'SerAGY')
+dataset$D.SerUCN = as.numeric(dataset$tRNA == 'SerUCN')
+dataset$D.Thr = as.numeric(dataset$tRNA == 'Thr')
+dataset$D.Trp = as.numeric(dataset$tRNA == 'Trp')
+dataset$D.Tyr = as.numeric(dataset$tRNA == 'Tyr')
+dataset$D.Val = as.numeric(dataset$tRNA == 'Val')
+
+# Baseline var. - amphibia
+dataset$D.reptilia = as.numeric(dataset$group == 'reptilia')
+dataset$D.mammals = as.numeric(dataset$group == 'mammals')
+dataset$D.birds = as.numeric(dataset$group == 'birds')
+
+# Baseline variable - cold-blooded species (amphibia and reptilia) 
+dataset$D.warm = dataset$D.mammals + dataset$D.birds
+
+#head(data$D.Ala)
+#table(data$D.Ala)
+#dim(data)
+
+# Mechannistical. 
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC), data = dataset)
+summary(res) # get p-value in the future just in case
+# GC and WC content account for 49% of delta_G 
+
+# Cold-blooded and warm-blooded
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.warm, data = dataset)
+summary(res)
+# 51% explained. Warm more stable as expected
+
+# By groups
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.reptilia + D.mammals + D.birds, data = dataset)
+summary(res)
+# Almost 52% Moving down from least stable to most stable -> amphibia -> 
+# reptilia -> mammals -> birds 
+
+# by tRNA
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr, data = dataset)
+summary(res) # get p-value in the future just in case
+# 60% that's good. Need to find the right dummy though.
+
+# By light heavy chain
+
+# By tRNA + groups
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr + D.amphibia + D.birds + D.mammals, data = dataset)
+summary(res) # get p-value in the future just in case
+
+# By tRNA within groups
+# Cold
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr, data = dataset[dataset$group == "amphibia" | dataset$group == "reptilia",])
+summary(res) # get p-value in the future just in case
+CB = data.frame(coefficients(res))
+# Warm
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr, data = dataset[dataset$group == "mammals" | dataset$group == "birds",])
+summary(res) # get p-value in the future just in case
+WB = data.frame(coefficients(res))
+
+CWB = cbind(CB,WB)
+CWB = CWB[-c(1,2,3),]
+names(CWB) = c('CB','WB')
+cor.test(CWB$CB,CWB$WB,method = 'spearman')
+plot(CWB$CB,CWB$WB)
+
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr, data = dataset[dataset$group == "birds",])
+summary(res) # get p-value in the future just in case
+# Load AnAge database file into R
+anage_data <- read.delim("C:\\WB\\tRNA\\1_raw_data\\3_eco_params\\anage_data.txt", header=TRUE, sep="\t")
+
+# Sort out species name 7 + _ + 8
+anage_data[,7] <- paste(anage_data[,7], anage_data[,8], sep = "_")
+anage_data[,8] <- NULL
+colnames(anage_data)[7] <- "species"
+# Merge datasets first
+merger <- merge(dataset, anage_data, by = "species", all.x = TRUE) 
+
+# Including BMR in model
+# Metabolic rate - 50%
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + log10(Metabolic.rate..W.), data = merger)
+summary(res)
+summary(merger$Metabolic.rate..W.)
+# Good result, right direction
+
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + scale(log10(Metabolic.rate..W.)), data = merger)
+summary(res)
+
+# Maximum longevity - 54%. By groups as well - 55%
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.warm + Maximum.longevity..yrs., data = merger)
+summary(res)
+# Higher longevity, bigger BMR
+
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.warm + Body.mass..g., data = merger)
+summary(res)
+
+# Correlate tRNA specific correltions and codon usage from old results
+res <- lm(gibbs ~ scale(WC-GC) + scale(GC) + D.Glu + D.Ala + D.LeuUUR + D.Pro + D.Gln + D.Met + D.Asp + D.His + D.LeuCUN + D.Cys + D.Val + D.Gly + D.Asn + D.Lys + D.Trp + D.Thr + D.Arg + D.Phe + D.Ile + D.SerAGY + D.Tyr, data = dataset)
+summary(res) # get p-value in the future just in case
+coef <- data.frame(coefficients(res))
+
+tRNA <- c("D.SerAGY", rownames(coef))
+tRNA
+tRNA <- tRNA[-c(2,3,4)]
+tRNA
+coeff <- coef[,1]
+coeff
+coeff <- coeff[-c(1,2,3)]
+coeff <- c(0, coeff)
+codon_use <- as.numeric(c(54.61314, 93.72263, 246.5912, 138.9927, 198.8467, 89.46715, 235.781, 67.48175, 99.12409, 474.4015, 25.34307, 177.5182, 215.1679, 157.5328, 95.35766, 104.1314, 321.708, 65.0146, 232.6131, 336.708, 54.61314, 132))
+light_heavy <- c("l","l", "l", "h", "l", "h", "h", "h", "h", "h", "l", "h", "h", "l", "h", "h", "h", "h", "h", "h", "h", "l")
+affinity_rank <- as.numeric(c(0, 0, 2, 0, 9, 13, 6, 1, 0, 0, 0, 5, 3, 0, 4, 12, 8, 7, 10, 11, 0, 0))
+trna_codon <- cbind(tRNA, coeff, codon_use, light_heavy, affinity_rank)
+trna_codon <- as.data.frame(trna_codon)
+trna_codon
+summary(as.numeric(as.character(trna_codon[trna_codon$fourth == 'l',]$second)))
+summary(as.numeric(as.character(trna_codon[trna_codon$fourth == 'h',]$second)))
+summary(as.numeric(as.character(trna_codon[trna_codon$affinity_rank != 0,])))
+wilcox.test(as.numeric(as.character(trna_codon[trna_codon$fourth == 'l',]$second)),as.numeric(as.character(trna_codon[trna_codon$fourth == 'h',]$second)), alternative = 'greater')
+dim(trna_codon)
+cor.test(as.numeric(trna_codon[,2]), as.numeric(trna_codon[,3]), method = 'kendall')
+# How to include the baseline var? What's the coefficient
+# SerUCN not included
+# Lysyl NOT INCLUDED
+trna_codon$affinity_rank =  as.numeric(as.character(trna_codon$affinity_rank))
+trna_codon$coeff =  as.numeric(as.character(trna_codon$coeff))
+plot(trna_codon[trna_codon$affinity_rank>0,]$affinity_rank,trna_codon[trna_codon$affinity_rank>0,]$coeff)
+cor.test(trna_codon[trna_codon$affinity_rank>0,]$affinity_rank,trna_codon[trna_codon$affinity_rank>0,]$coeff, method = 'kendall')
+```
